@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Rika: Battle Royale — HTML Demo</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#090d16;color:#eef4ff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+#wrap{height:100vh;display:flex;align-items:center;justify-content:center}
+canvas{background:#111a25;border:2px solid #33465e;border-radius:14px;box-shadow:0 20px 70px #0008;max-width:96vw;max-height:80vh}
+#hud{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+.card{background:#101827dd;border:1px solid #33445b;border-radius:10px;padding:9px 12px;font-size:14px}
+#help{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#101827dd;border:1px solid #33445b;border-radius:10px;padding:8px 13px;font-size:13px;text-align:center}
+#overlay{position:fixed;inset:0;background:#050812d9;display:flex;align-items:center;justify-content:center}
+.panel{width:min(620px,92vw);background:#101827;border:1px solid #40536d;border-radius:18px;padding:25px;box-shadow:0 25px 80px #000b}
+h1{margin:0 0 8px;font-size:30px}h2{margin:0 0 12px}.muted{color:#aab7ca;line-height:1.55}
+button{border:0;border-radius:10px;padding:11px 17px;background:#5b8cff;color:white;font-weight:700;cursor:pointer}
+button:hover{filter:brightness(1.1)}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.small{font-size:12px;color:#91a0b6;margin-top:14px}.hidden{display:none}
+ul{line-height:1.7;color:#c9d4e4}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="960" height="600"></canvas></div>
+<div id="hud" class="hidden">
+  <div class="card">❤️ HP: <b id="hp">100</b> &nbsp; 🔫 Ammo: <b id="ammo">12</b></div>
+  <div class="card">👥 Bots: <b id="bots">12</b> &nbsp; ⏱️ <b id="time">0</b>s</div>
+</div>
+<div id="help" class="hidden">WASD / phím mũi tên để di chuyển • Chuột để ngắm • Click để bắn • R để nạp</div>
+
+<div id="overlay">
+ <div class="panel" id="privacyPanel">
+  <h1>Rika: Battle Royale</h1>
+  <p class="muted">Bản HTML demo lấy cảm hứng từ ứng dụng trong Privacy Policy bạn cung cấp.</p>
+  <h2>Privacy & Consent</h2>
+  <ul>
+   <li>Demo này không gửi dữ liệu gameplay lên máy chủ.</li>
+   <li>Không dùng cookie, pixel hay SDK theo dõi trong bản HTML này.</li>
+   <li>Thông tin quyền riêng tư trong file nguồn nêu việc ứng dụng có thể thu thập IP, trang đã xem, thời gian sử dụng và hệ điều hành; đồng thời có thể dùng SDK/công nghệ tracking của bên thứ ba. fileciteturn0file0L5-L14</li>
+   <li>Privacy Policy cho biết người dùng có thể yêu cầu truy cập, sửa hoặc xóa dữ liệu qua email của Service Provider. fileciteturn0file0L17-L18</li>
+ </ul>
+ <div class="row"><button id="start">Đồng ý & Chơi</button><button id="privacy">Xem Privacy Policy</button></div>
+ <div class="small">Bản game này chỉ là prototype HTML chạy local.</div>
+ </div>
+ <div class="panel hidden" id="privacyText">
+  <h2>Privacy Policy — tóm tắt</h2>
+  <p class="muted">Theo file bạn cung cấp: dữ liệu có thể gồm IP, các trang đã truy cập, thời gian truy cập/sử dụng và hệ điều hành; có thể có cookies/SDK/pixels cho chức năng, analytics hoặc dịch vụ. fileciteturn0file0L5-L14</p>
+  <p class="muted">Chính sách nêu quyền yêu cầu truy cập, chỉnh sửa hoặc xóa dữ liệu. Dữ liệu do người dùng cung cấp được nêu thời hạn lưu giữ trong thời gian sử dụng + 12 tháng; dữ liệu tự động thu thập tối đa 24 tháng, trừ trường hợp pháp luật yêu cầu lâu hơn. fileciteturn0file0L59-L66</p>
+  <p class="muted">Ứng dụng không dành cho trẻ dưới 16 tuổi; chính sách cũng có phần về bảo mật và thông báo sự cố dữ liệu. fileciteturn0file0L69-L80</p>
+  <div class="row"><button id="back">Quay lại</button></div>
+ </div>
+ <div class="panel hidden" id="endPanel">
+  <h1 id="result">Game Over</h1><p class="muted" id="resultText"></p>
+  <div class="row"><button id="again">Chơi lại</button></div>
+ </div>
+</div>
+
+<script>
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+const W=c.width,H=c.height;
+let keys={},mouse={x:W/2,y:H/2,down:false},running=false,last=0,startTime=0;
+let player,bots=[],bullets=[],zone={x:W/2,y:H/2,r:285},kills=0;
+const $=id=>document.getElementById(id);
+
+function rand(a,b){return Math.random()*(b-a)+a}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function reset(){
+ player={x:W/2,y:H/2,r:13,hp:100,ammo:12,cool:0,reload:0};
+ bots=[];bullets=[];kills=0;zone={x:W/2,y:H/2,r:285};
+ for(let i=0;i<12;i++){let a=rand(0,Math.PI*2),rr=rand(120,270);bots.push({x:W/2+Math.cos(a)*rr,y:H/2+Math.sin(a)*rr,r:11,hp:40,cd:rand(.3,1.5),speed:rand(45,70)})}
+ running=true;startTime=performance.now();$('overlay').classList.add('hidden');$('hud').classList.remove('hidden');$('help').classList.remove('hidden');
+}
+function shoot(owner,tx,ty){
+ let a=Math.atan2(ty-owner.y,tx-owner.x);
+ bullets.push({x:owner.x,y:owner.y,vx:Math.cos(a)*520,vy:Math.sin(a)*520,life:1.3,owner});
+}
+function playerShoot(){
+ if(!running||player.reload>0||player.cool>0)return;
+ if(player.ammo<=0){player.reload=1.0;return}
+ shoot(player,mouse.x,mouse.y);player.ammo--;player.cool=.18;
+}
+function update(dt){
+ if(!running)return;
+ player.cool=Math.max(0,player.cool-dt);
+ if(player.reload>0){player.reload-=dt;if(player.reload<=0)player.ammo=12}
+ let dx=(keys.a||keys.ArrowLeft?-1:0)+(keys.d||keys.ArrowRight?1:0);
+ let dy=(keys.w||keys.ArrowUp?-1:0)+(keys.s||keys.ArrowDown?1:0);
+ let len=Math.hypot(dx,dy)||1;player.x=Math.max(15,Math.min(W-15,player.x+dx/len*180*dt));player.y=Math.max(15,Math.min(H-15,player.y+dy/len*180*dt));
+ if(mouse.down)playerShoot();
+ zone.r=Math.max(70,285-(performance.now()-startTime)/1000*3.0);
+ if(dist(player,zone)>zone.r)player.hp-=8*dt;
+ bots.forEach(b=>{
+   if(b.hp<=0)return;
+   let d=dist(b,player),a=Math.atan2(player.y-b.y,player.x-b.x);
+   if(d>180){b.x+=Math.cos(a)*b.speed*dt;b.y+=Math.sin(a)*b.speed*dt}
+   else if(d<100){b.x-=Math.cos(a)*b.speed*dt;b.y-=Math.sin(a)*b.speed*dt}
+   b.x=Math.max(12,Math.min(W-12,b.x));b.y=Math.max(12,Math.min(H-12,b.y));
+   b.cd-=dt;if(d<360&&b.cd<=0){shoot(b,player.x,player.y);b.cd=rand(1.0,1.8)}
+   if(dist(b,zone)>zone.r)b.hp-=4*dt;
+ });
+ bullets.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt});
+ for(const q of bullets){
+   if(q.life<=0)continue;
+   if(q.owner===player){
+     for(const b of bots)if(b.hp>0&&dist(q,b)<b.r+4){b.hp-=25;q.life=0;if(b.hp<=0)kills++ ;break}
+   }else if(dist(q,player)<player.r+4){player.hp-=12;q.life=0}
+ }
+ bullets=bullets.filter(q=>q.life>0&&q.x>-10&&q.x<W+10&&q.y>-10&&q.y<H+10);
+ bots=bots.filter(b=>b.hp>0);
+ $('hp').textContent=Math.max(0,Math.ceil(player.hp));$('ammo').textContent=player.ammo;$('bots').textContent=bots.length;$('time').textContent=Math.floor((performance.now()-startTime)/1000);
+ if(player.hp<=0)end(false); else if(bots.length===0)end(true);
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='#152231';ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='#203447';ctx.lineWidth=1;
+ for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+ for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(0,0,W,H);
+ ctx.beginPath();ctx.arc(zone.x,zone.y,zone.r,0,Math.PI*2);ctx.strokeStyle='#73a7ff';ctx.lineWidth=4;ctx.stroke();
+ ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.arc(zone.x,zone.y,zone.r,0,Math.PI*2,true);ctx.fillStyle='rgba(230,40,70,.12)';ctx.fill();ctx.restore();
+ bots.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fillStyle='#ff6b6b';ctx.fill();ctx.fillStyle='#fff';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(b.hp),b.x,b.y-16)});
+ bullets.forEach(q=>{ctx.beginPath();ctx.arc(q.x,q.y,4,0,7);ctx.fillStyle=q.owner===player?'#ffe27a':'#ff8c8c';ctx.fill()});
+ ctx.save();ctx.translate(player.x,player.y);ctx.rotate(Math.atan2(mouse.y-player.y,mouse.x-player.x));ctx.fillStyle='#5b8cff';ctx.beginPath();ctx.arc(0,0,player.r,0,7);ctx.fill();ctx.fillStyle='#dbe7ff';ctx.fillRect(7,-4,16,8);ctx.restore();
+}
+function end(win){
+ running=false;$('hud').classList.add('hidden');$('help').classList.add('hidden');$('overlay').classList.remove('hidden');
+ $('privacyPanel').classList.add('hidden');$('privacyText').classList.add('hidden');$('endPanel').classList.remove('hidden');
+ $('result').textContent=win?'🏆 Victory Royale!':'💀 Game Over';
+ $('resultText').textContent=win?`Bạn đã sống sót và hạ ${kills} đối thủ.`:`Bạn đã hạ ${kills} đối thủ. Hãy thử lại!`;
+}
+function loop(t){let dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);draw();requestAnimationFrame(loop)}
+addEventListener('keydown',e=>{keys[e.key]=true;if(e.key.toLowerCase()==='r'&&player&&player.ammo<12&&player.reload<=0)player.reload=1});
+addEventListener('keyup',e=>keys[e.key]=false);
+c.addEventListener('mousemove',e=>{let r=c.getBoundingClientRect();mouse.x=(e.clientX-r.left)*W/r.width;mouse.y=(e.clientY-r.top)*H/r.height});
+c.addEventListener('mousedown',()=>{mouse.down=true;playerShoot()});addEventListener('mouseup',()=>mouse.down=false);
+$('start').onclick=reset;$('again').onclick=()=>{ $('endPanel').classList.add('hidden');$('privacyPanel').classList.remove('hidden')};
+$('privacy').onclick=()=>{$('privacyPanel').classList.add('hidden');$('privacyText').classList.remove('hidden')};
+$('back').onclick=()=>{$('privacyText').classList.add('hidden');$('privacyPanel').classList.remove('hidden')};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
